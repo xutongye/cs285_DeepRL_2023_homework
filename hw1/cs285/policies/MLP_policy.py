@@ -101,7 +101,6 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         )
         self.mean_net.to(ptu.device)
         self.logstd = nn.Parameter(
-
             torch.zeros(self.ac_dim, dtype=torch.float32, device=ptu.device)
         )
         self.logstd.to(ptu.device)
@@ -116,6 +115,29 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         """
         torch.save(self.state_dict(), filepath)
 
+    def get_action(self, obs: np.ndarray) -> np.ndarray:
+        """
+        Get action from policy given observation
+        
+        Args:
+            obs: observation array of shape (batch_size, ob_dim)
+        
+        Returns:
+            action: action array of shape (batch_size, ac_dim)
+        """
+        # 确保obs是2D数组
+        if obs.ndim == 1:
+            obs = obs.reshape(1, -1)
+        
+        # 获取动作分布
+        dist = self.forward(obs)
+        
+        # 从分布中采样动作
+        action = dist.sample()
+        
+        # 转换为numpy数组并返回
+        return ptu.to_numpy(action)
+
     def forward(self, observation: torch.FloatTensor) -> Any:
         """
         Defines the forward pass of the network
@@ -124,12 +146,18 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             action: sampled action(s) from the policy
         """
-        # TODO: implement the forward pass of the network.
-        # You can return anything you want, but you should be able to differentiate
-        # through it. For example, you can return a torch.FloatTensor. You can also
-        # return more flexible objects, such as a
-        # `torch.distributions.Distribution` object. It's up to you!
-        raise NotImplementedError
+        # 将观察转换为tensor并移到正确的设备
+        obs = ptu.from_numpy(observation) if isinstance(observation, np.ndarray) else observation
+        
+        # 通过mean_net获取动作均值
+        mean = self.mean_net(obs)
+        
+        # 创建正态分布
+        std = torch.exp(self.logstd)
+        dist = torch.distributions.Normal(mean, std)
+        
+        # 返回分布对象，这样可以采样动作
+        return dist
 
     def update(self, observations, actions):
         """
@@ -140,8 +168,20 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             dict: 'Training Loss': supervised learning loss
         """
-        # TODO: update the policy and return the loss
-        loss = TODO
+        # 将数据转换为tensor
+        obs = ptu.from_numpy(observations)
+        acs = ptu.from_numpy(actions)
+        
+        # 获取策略分布
+        dist = self.forward(obs)
+        
+        # 计算负对数似然损失（监督学习目标）
+        loss = -torch.mean(dist.log_prob(acs))
+        
+        # 反向传播和优化
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         return {
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),

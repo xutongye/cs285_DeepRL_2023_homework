@@ -8,7 +8,7 @@ Functions to edit:
 import pickle
 import os
 import time
-import gym
+import gymnasium as gym
 
 import numpy as np
 import torch
@@ -62,7 +62,7 @@ def run_training_loop(params):
     #############
 
     # Make the gym environment
-    env = gym.make(params['env_name'], render_mode=None)
+    env = gym.make(params['env_name'], render_mode='rgb_array')
     env.reset(seed=seed)
 
     # Maximum length for episodes
@@ -84,7 +84,6 @@ def run_training_loop(params):
     ## AGENT
     #############
 
-    # TODO: Implement missing functions in this class.
     actor = MLPPolicySL(
         ac_dim,
         ob_dim,
@@ -129,19 +128,18 @@ def run_training_loop(params):
         else:
             # DAGGER training from sampled data relabeled by expert
             assert params['do_dagger']
-            # TODO: collect `params['batch_size']` transitions
-            # HINT: use utils.sample_trajectories
-            # TODO: implement missing parts of utils.sample_trajectory
-            paths, envsteps_this_batch = TODO
 
-            # relabel the collected obs with actions from a provided expert policy
+            # 收集轨迹
+            paths, envsteps_this_batch = utils.sample_trajectories(env, actor, params['batch_size'], params['ep_len'])
+
+            # 重标记收集的轨迹
             if params['do_dagger']:
                 print("\nRelabelling collected observations with labels from an expert policy...")
 
-                # TODO: relabel collected obsevations (from our policy) with labels from expert policy
-                # HINT: query the policy (using the get_action function) with paths[i]["observation"]
-                # and replace paths[i]["action"] with these expert labels
-                paths = TODO
+                # 使用专家策略重新标记动作
+                for path in paths:
+                    expert_actions = expert_policy.get_action(path['observation'])
+                    path['action'] = expert_actions
 
         total_envsteps += envsteps_this_batch
         # add collected data to replay buffer
@@ -152,16 +150,34 @@ def run_training_loop(params):
         training_logs = []
         for _ in range(params['num_agent_train_steps_per_iter']):
 
-          # TODO: sample some data from replay_buffer
-          # HINT1: how much data = params['train_batch_size']
-          # HINT2: use np.random.permutation to sample random indices
-          # HINT3: return corresponding data points from each array (i.e., not different indices from each array)
-          # for imitation learning, we only need observations and actions.  
-          ob_batch, ac_batch = TODO
+            #######################
+            ## 从缓冲区采样训练数据
+            ####################### 
+            
+            # 获取缓冲区中的数据总量
+            buffer_size = len(replay_buffer)
 
-          # use the sampled data to train an agent
-          train_log = actor.update(ob_batch, ac_batch)
-          training_logs.append(train_log)
+            # 确保有足够的数据可以采样
+            if buffer_size > 0:
+                # 确定要采样的数据量
+                batch_size = min(params['train_batch_size'], buffer_size)
+                
+                # 使用np.random.permutation生成随机索引
+                # 从0到buffer_size-1中随机选择batch_size个索引
+                indices = np.random.permutation(buffer_size)[:batch_size]
+                
+                # 从回放缓冲区中采样对应的观察和动作
+                # 注意：使用相同的索引确保观察和动作对应
+                ob_batch = replay_buffer.obs[indices]
+                ac_batch = replay_buffer.acs[indices]
+            else:
+                # 如果缓冲区为空，创建空的批次
+                ob_batch = np.array([])
+                ac_batch = np.array([])
+
+            # use the sampled data to train an agent
+            train_log = actor.update(ob_batch, ac_batch)
+            training_logs.append(train_log)
 
         # log/save
         print('\nBeginning logging procedure...')
