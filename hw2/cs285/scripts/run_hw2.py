@@ -1,6 +1,6 @@
 import os
 import time
-
+import tqdm
 from cs285.agents.pg_agent import PGAgent
 
 import os
@@ -67,8 +67,10 @@ def run_training_loop(args):
     total_envsteps = 0
     start_time = time.time()
 
-    for itr in range(args.n_iter):
-        print(f"\n********** Iteration {itr} ************")
+    range_iter = tqdm.trange(args.n_iter) if args.quiet else range(args.n_iter)
+    for itr in range_iter:
+        if not args.quiet:
+            print(f"\n********** Iteration {itr} ************")
         # TODO: sample `args.batch_size` transitions using utils.sample_trajectories
         # make sure to use `max_ep_len`
         trajs, envsteps_this_batch = utils.sample_trajectories(env, agent.actor, args.batch_size, max_ep_len)
@@ -83,7 +85,8 @@ def run_training_loop(args):
 
         if itr % args.scalar_log_freq == 0:
             # save eval metrics
-            print("\nCollecting data for eval...")
+            if not args.quiet:
+                print("\nCollecting data for eval...")
             eval_trajs, eval_envsteps_this_batch = utils.sample_trajectories(
                 env, agent.actor, args.eval_batch_size, max_ep_len
             )
@@ -100,14 +103,17 @@ def run_training_loop(args):
 
             # perform the logging
             for key, value in logs.items():
-                print("{} : {}".format(key, value))
+                if not args.quiet:
+                    print("{} : {}".format(key, value))
                 logger.log_scalar(value, key, itr)
-            print("Done logging...\n\n")
+            if not args.quiet:
+                print("Done logging...\n\n")
 
             logger.flush()
 
         if args.video_log_freq != -1 and itr % args.video_log_freq == 0:
-            print("\nCollecting video rollouts...")
+            if not args.quiet:
+                print("\nCollecting video rollouts...")
             eval_video_trajs = utils.sample_n_trajectories(
                 env, agent.actor, MAX_NVIDEO, max_ep_len, render=True
             )
@@ -121,7 +127,8 @@ def run_training_loop(args):
             )
 
     agent.actor.save(os.path.join(args.logdir, "policy.pt"))
-    print(f"Policy saved to {os.path.join(args.logdir, 'policy.pt')}")
+    if not args.quiet:
+        print(f"Policy saved to {os.path.join(args.logdir, 'policy.pt')}")
 
 
 def main():
@@ -160,6 +167,7 @@ def main():
     parser.add_argument("--scalar_log_freq", type=int, default=1)
 
     parser.add_argument("--action_noise_std", type=float, default=0)
+    parser.add_argument("--quiet", action="store_true")
 
     args = parser.parse_args()
 
