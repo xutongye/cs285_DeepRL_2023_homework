@@ -120,6 +120,9 @@ def run_training_loop(args):
                 video_title="eval_rollouts",
             )
 
+    agent.actor.save(os.path.join(args.logdir, "policy.pt"))
+    print(f"Policy saved to {os.path.join(args.logdir, 'policy.pt')}")
+
 
 def main():
     import argparse

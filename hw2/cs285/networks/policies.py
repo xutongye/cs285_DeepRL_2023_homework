@@ -28,6 +28,15 @@ class MLPPolicy(nn.Module):
     ):
         super().__init__()
 
+        self.init_kwargs = {
+            "ac_dim": ac_dim,
+            "ob_dim": ob_dim,
+            "discrete": discrete,
+            "n_layers": n_layers,
+            "layer_size": layer_size,
+            "learning_rate": learning_rate,
+        }
+
         if discrete:
             self.logits_net = ptu.build_mlp(
                 input_size=ob_dim,
@@ -54,6 +63,29 @@ class MLPPolicy(nn.Module):
         )
 
         self.discrete = discrete
+
+    def save(self, filepath):
+        """
+        :param filepath: path to save MLP
+        """
+        ckpt = {
+            "class": "MLPPolicy",
+            "init_kwargs": self.init_kwargs,
+            "state_dict": self.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+        }
+        torch.save(ckpt, filepath)
+
+    @classmethod
+    def load(cls, filepath):
+        """
+        :param filepath: path to load MLP
+        """
+        ckpt = torch.load(filepath, map_location=ptu.device)
+        instance = cls(**ckpt["init_kwargs"])
+        instance.load_state_dict(ckpt["state_dict"])
+        instance.optimizer.load_state_dict(ckpt["optimizer"])
+        return instance
 
     @torch.no_grad()
     def get_action(self, obs: np.ndarray) -> np.ndarray:
