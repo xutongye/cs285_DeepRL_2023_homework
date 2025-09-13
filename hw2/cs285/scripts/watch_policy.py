@@ -4,12 +4,19 @@ import gymnasium as gym
 import numpy as np
 import time
 import argparse
+from cs285.networks.policies import MLPPolicy
 
-def watch_random_policy(env_name="CartPole-v1", num_episodes=5, fps=30, show_info=True):
+def watch_policy(env_name="CartPole-v1", num_episodes=5, fps=30, show_info=True, policy_path=None):
     """实时观看随机策略的表现"""
     
+
     # 创建环境（人类可视化模式）
     env = gym.make(env_name, render_mode='human')
+
+    if policy_path is None:
+        policy = RandomPolicy(env)
+    else:
+        policy = MLPPolicy.load(policy_path)
     
     # 运行仿真
     all_returns = []
@@ -25,8 +32,8 @@ def watch_random_policy(env_name="CartPole-v1", num_episodes=5, fps=30, show_inf
             steps = 0
             
             while True:
-                # 随机选择动作
-                action = env.action_space.sample()
+                # 选择动作
+                action = policy.get_action(obs)
                 
                 # 执行动作
                 obs, reward, terminated, truncated, _ = env.step(action)
@@ -57,7 +64,7 @@ def watch_random_policy(env_name="CartPole-v1", num_episodes=5, fps=30, show_inf
             
             # 短暂暂停，让用户看清结果
             if episode < num_episodes - 1:  # 最后一个episode不暂停
-                time.sleep(5)
+                time.sleep(2)
     
     except KeyboardInterrupt:
         print(f"\n用户中断观看，已完成 {len(all_returns)} 个episodes")
@@ -85,6 +92,13 @@ def watch_random_policy(env_name="CartPole-v1", num_episodes=5, fps=30, show_inf
         'std_return': std_return if all_returns else 0,
     }
 
+class RandomPolicy:
+    def __init__(self, env: gym.Env):
+        self.env = env
+
+    def get_action(self, *_, **__):
+        return self.env.action_space.sample()
+
 def main():
     parser = argparse.ArgumentParser(description="观看随机策略的实时表现")
     parser.add_argument("--env_name", type=str, default="CartPole-v1",
@@ -95,14 +109,17 @@ def main():
                         help="观看时的帧率（越大越快）")
     parser.add_argument("--show_info", action="store_true", default=True,
                         help="是否显示详细信息")
+    parser.add_argument("--policy_path", type=str, default=None,
+                        help="策略路径")
     
     args = parser.parse_args()
     
-    watch_random_policy(
+    watch_policy(
         env_name=args.env_name,
         num_episodes=args.num_episodes,
         fps=args.fps,
-        show_info=args.show_info
+        show_info=args.show_info,
+        policy_path=args.policy_path
     )
     
 if __name__ == "__main__":
